@@ -5,7 +5,8 @@
   "main": "server/index.js",
   "scripts": {
     "start": "node server/index.js",
-    "dev": "node --watch server/index.js"
+    "dev": "node --watch server/index.js",
+    "generate-icons": "node scripts/generate-icons.js"
   },
   "keywords": [
     "watch-together",
@@ -17,11 +18,15 @@
     "youtube",
     "realtime"
   ],
-  "author": "",
+  "author": "Adham Cherkaoui Eddeqaqi <0dh4mm@gmail.com>",
   "license": "MIT",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.21.2",
     "socket.io": "^4.8.1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/0dh4m/watch-together.git"
   }
 }

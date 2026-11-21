@@ -1,0 +1,10 @@
+node_modules/
+cv/
+portfolio/
+.DS_Store
+Thumbs.db
+data/*.db
+data/*.sqlite
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*

@@ -1,0 +1,1010 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>Watch Together - Real-Time Cinema Sync & Voice</title>
+  <meta name="description" content="Watch movies and videos simultaneously in perfect synchronization with friends, live voice chat, and real-time floating reactions.">
+  <meta name="theme-color" content="#09090b">
+
+  <!-- PWA Manifest & Icons -->
+  <link rel="manifest" href="/manifest.json">
+  <link rel="icon" type="image/svg+xml" href="/icons/icon.svg">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+
+  <!-- Tailwind CSS CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            obsidian: '#09090b',
+            cinema: {
+              800: '#18181b',
+              900: '#121217',
+              950: '#09090b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Google Fonts: Inter -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+
+  <!-- Font Awesome 6 Icons -->
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+  <!-- HLS.js for .m3u8 adaptive streaming -->
+  <script src="https://cdn.jsdelivr.net/npm/hls.js@latest"></script>
+
+  <!-- Custom Dark Cinema Styles -->
+  <link rel="stylesheet" href="/css/style.css">
+</head>
+<body class="bg-obsidian text-zinc-100 flex flex-col min-h-screen selection:bg-violet-600 selection:text-white">
+
+  <!-- Ambient Glow Effects -->
+  <div class="ambient-glow"></div>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-5 right-5 z-50 flex flex-col gap-2 max-w-sm pointer-events-none"></div>
+
+  <!-- Top Navigation Header -->
+  <header class="sticky top-0 z-40 w-full glass-panel border-b border-white/5 px-4 lg:px-8 py-3 flex items-center justify-between">
+    <!-- Brand Logo -->
+    <div class="flex items-center gap-3 cursor-pointer" onclick="app.showLobbyView()">
+      <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-violet-600 via-indigo-500 to-cyan-400 flex items-center justify-center shadow-lg shadow-violet-500/20">
+        <i class="fa-solid fa-play text-white text-sm ml-0.5"></i>
+      </div>
+      <div>
+        <h1 class="text-base font-bold tracking-tight bg-gradient-to-r from-white via-zinc-200 to-violet-400 bg-clip-text text-transparent" data-i18n="app_title">
+          WatchTogether
+        </h1>
+        <p class="text-[10px] text-zinc-400 hidden sm:block -mt-1" data-i18n="app_tagline">Real-Time Cinema & Voice</p>
+      </div>
+    </div>
+
+    <!-- In-Room Active Status / Info (Visible when in a room) -->
+    <div id="nav-room-badge" class="hidden flex items-center gap-2 sm:gap-4">
+      <div class="flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/80 border border-white/10 text-xs">
+        <span id="header-room-title" class="font-semibold text-zinc-200 max-w-[120px] sm:max-w-[200px] truncate">Room</span>
+        <button onclick="ui.copyInviteLink(app.currentRoom?.code)" class="flex items-center gap-1 font-mono text-violet-400 hover:text-violet-300 bg-violet-500/10 hover:bg-violet-500/20 px-2 py-0.5 rounded transition" title="Click to copy invite link">
+          <span id="header-room-code">CODE</span>
+          <i class="fa-regular fa-copy text-[10px]"></i>
+        </button>
+      </div>
+
+      <div id="room-mode-badge" class="hidden sm:inline-flex px-2.5 py-0.5 rounded-full text-[11px] font-medium bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+        Collaborative
+      </div>
+
+      <button onclick="app.leaveRoom()" class="px-3 py-1.5 rounded-lg bg-zinc-800/80 hover:bg-rose-600/30 hover:text-rose-300 text-zinc-300 text-xs border border-white/5 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-arrow-right-from-bracket"></i>
+        <span class="hidden sm:inline">Leave</span>
+      </button>
+    </div>
+
+    <!-- Header Actions: Language, SFX, Diagnostics, PWA Install & Avatar -->
+    <div class="flex items-center gap-2 sm:gap-2.5">
+      <!-- Language Selector -->
+      <select id="lang-select" onchange="i18n.setLanguage(this.value)" class="glass-input px-2 py-1 rounded-xl text-xs bg-zinc-900 text-zinc-300 cursor-pointer border border-white/10">
+        <option value="en">🇺🇸 EN</option>
+        <option value="ar_ma">🇲🇦 دارجة</option>
+        <option value="ar">🇸🇦 عربي</option>
+        <option value="fr">🇫🇷 FR</option>
+      </select>
+
+      <!-- SFX Toggle -->
+      <button id="btn-sfx-toggle" onclick="sfx.toggleMute()" class="p-2 rounded-xl glass-panel-hover text-violet-400 hover:text-white transition" title="Toggle Sound Effects">
+        <i class="fa-solid fa-volume-high text-xs"></i>
+      </button>
+
+      <!-- Sync Diagnostics -->
+      <button onclick="ui.openSyncDiagnosticsModal()" class="p-2 rounded-xl glass-panel-hover text-zinc-400 hover:text-cyan-400 transition" title="Sync Diagnostics & Latency">
+        <i class="fa-solid fa-gauge-high text-xs"></i>
+      </button>
+
+      <!-- PWA Install Button -->
+      <button id="pwa-install-btn" class="hidden px-3 py-1.5 rounded-lg bg-gradient-to-r from-violet-600 to-cyan-500 text-white text-xs font-semibold shadow-md shadow-cyan-500/10 hover:opacity-90 transition flex items-center gap-1.5">
+        <i class="fa-solid fa-download"></i>
+        <span class="hidden sm:inline">Install</span>
+      </button>
+
+      <!-- Avatar Picker Trigger -->
+      <button onclick="ui.openModal('modal-avatar-picker')" class="p-1 rounded-xl glass-panel-hover flex items-center gap-2 text-xs" title="Change Avatar">
+        <div id="lobby-avatar-icon" class="w-8 h-8 rounded-lg bg-violet-600/20 text-violet-300 flex items-center justify-center text-base">
+          🐱
+        </div>
+      </button>
+    </div>
+  </header>
+
+  <!-- MAIN APPLICATION CONTENT -->
+  <main class="flex-1 w-full max-w-7xl mx-auto p-3 sm:p-5 lg:p-6 z-10">
+
+    <!-- ========================================== -->
+    <!-- 1. LOBBY & LANDING VIEW                    -->
+    <!-- ========================================== -->
+    <section id="lobby-view" class="space-y-8 animate-fadeIn">
+      <!-- Hero Header -->
+      <div class="text-center py-6 sm:py-10 max-w-2xl mx-auto space-y-3">
+        <div class="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-violet-500/10 border border-violet-500/30 text-violet-400 text-xs font-medium">
+          <span class="w-2 h-2 rounded-full bg-cyan-400 animate-pulse"></span>
+          <span data-i18n="hero_tag">Ultra-Low Latency Synchronization & Voice</span>
+        </div>
+        <h2 class="text-3xl sm:text-5xl font-extrabold tracking-tight">
+          <span data-i18n="hero_title_1">Watch Movies Together</span> <br>
+          <span class="bg-gradient-to-r from-violet-400 via-indigo-300 to-cyan-400 bg-clip-text text-transparent" data-i18n="hero_title_2">
+            In Perfect Synchronization
+          </span>
+        </h2>
+        <p class="text-zinc-400 text-sm sm:text-base leading-relaxed" data-i18n="hero_desc">
+          Stream YouTube, direct links, HLS broadcasts, or your own local movie files with friends. Zero lag, WebRTC voice chat, and live floating reactions.
+        </p>
+
+        <!-- Profile Nickname & Avatar Setup Banner -->
+        <div class="glass-panel p-4 rounded-2xl max-w-md mx-auto flex items-center gap-3 border border-white/10 mt-6 shadow-xl">
+          <button type="button" onclick="document.getElementById('modal-avatar-picker').classList.remove('hidden')" class="w-12 h-12 rounded-2xl bg-zinc-800 flex items-center justify-center text-2xl border border-white/10 hover:border-violet-500 transition shadow-inner flex-shrink-0" title="Click to choose avatar">
+            <span id="lobby-profile-avatar-preview">🐱</span>
+          </button>
+          <div class="flex-1 text-left">
+            <label class="block text-[11px] font-medium text-zinc-400 mb-1" data-i18n="display_name">Your Display Nickname</label>
+            <input type="text" id="lobby-nickname-input" placeholder="Enter your name..." maxlength="25" class="w-full glass-input px-3 py-1.5 rounded-lg text-sm font-medium" onchange="app.saveProfile(this.value)">
+          </div>
+        </div>
+      </div>
+
+      <!-- Action Cards Grid -->
+      <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+        
+        <!-- Card 1: Create a Room -->
+        <div class="glass-panel p-6 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4 hover:border-violet-500/30 transition shadow-xl">
+          <div class="space-y-3">
+            <div class="w-10 h-10 rounded-xl bg-violet-600/20 text-violet-400 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-plus"></i>
+            </div>
+            <h3 class="text-lg font-bold text-zinc-100" data-i18n="create_room">Create a Room</h3>
+            <p class="text-xs text-zinc-400" data-i18n="create_room_desc">Launch a new synchronized cinema room and invite your friends with a 1-click link.</p>
+
+            <div class="space-y-2.5 pt-2">
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-400 mb-1" data-i18n="room_title">Room Title</label>
+                <input type="text" id="create-room-title" placeholder="e.g. Movie Night with Friends" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+              </div>
+
+              <div>
+                <label class="block text-[11px] font-medium text-zinc-400 mb-1" data-i18n="control_mode">Control Mode</label>
+                <select id="create-room-mode" class="w-full glass-input px-3 py-2 rounded-xl text-xs bg-zinc-900 text-zinc-200">
+                  <option value="collaborative" data-i18n="mode_collaborative">Collaborative (Everyone can play/pause)</option>
+                  <option value="host_only" data-i18n="mode_host_only">Host-Only Controls (Only host controls playback)</option>
+                </select>
+              </div>
+
+              <div class="flex items-center justify-between pt-1">
+                <label for="create-room-private" class="text-xs text-zinc-300 flex items-center gap-2 cursor-pointer">
+                  <input type="checkbox" id="create-room-private" class="rounded bg-zinc-800 border-zinc-700 text-violet-600 focus:ring-0" onchange="document.getElementById('pwd-input-group').classList.toggle('hidden', !this.checked)">
+                  <span data-i18n="password_protect">Password Protected (Private)</span>
+                </label>
+              </div>
+
+              <div id="pwd-input-group" class="hidden">
+                <input type="password" id="create-room-password" placeholder="Set a room password..." class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+              </div>
+            </div>
+          </div>
+
+          <button onclick="app.createRoomFromLobby()" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-semibold text-xs shadow-lg shadow-violet-600/30 transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-wand-magic-sparkles"></i>
+            <span data-i18n="create_btn">Create & Launch Room</span>
+          </button>
+        </div>
+
+        <!-- Card 2: Join by Room Code & Watch History -->
+        <div class="glass-panel p-6 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4 hover:border-cyan-500/30 transition shadow-xl">
+          <div class="space-y-3">
+            <div class="w-10 h-10 rounded-xl bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-lg">
+              <i class="fa-solid fa-right-to-bracket"></i>
+            </div>
+            <h3 class="text-lg font-bold text-zinc-100" data-i18n="join_by_code">Join by Room Code</h3>
+            <p class="text-xs text-zinc-400" data-i18n="join_desc">Have a 6-character room invite code from a friend? Enter it below to jump right in.</p>
+
+            <div class="flex items-center gap-2 pt-2">
+              <input type="text" id="join-code-input" placeholder="e.g. SYNC42" maxlength="6" class="w-full glass-input px-3 py-2.5 rounded-xl text-center font-mono font-bold tracking-widest text-sm uppercase">
+              <button onclick="app.joinRoom(document.getElementById('join-code-input').value)" class="px-5 py-2.5 rounded-xl bg-cyan-600 hover:bg-cyan-500 text-white font-semibold text-xs shadow-lg shadow-cyan-600/30 transition flex-shrink-0" data-i18n="join_btn">
+                Join
+              </button>
+            </div>
+
+            <!-- Recent Watch History -->
+            <div class="pt-4 border-t border-white/5">
+              <h4 class="text-xs font-semibold text-zinc-400 mb-2 flex items-center justify-between">
+                <span data-i18n="watch_history">Recent Watch History</span>
+                <i class="fa-solid fa-clock-rotate-left text-[11px] text-zinc-500"></i>
+              </h4>
+              <div id="watch-history-list" class="space-y-1.5 max-h-[140px] overflow-y-auto pr-1">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Card 3: Active Public Rooms -->
+        <div class="glass-panel p-6 rounded-2xl border border-white/10 flex flex-col justify-between space-y-4 hover:border-emerald-500/30 transition shadow-xl md:col-span-2 lg:col-span-1">
+          <div class="space-y-3">
+            <div class="flex items-center justify-between">
+              <div class="w-10 h-10 rounded-xl bg-emerald-500/20 text-emerald-400 flex items-center justify-center text-lg">
+                <i class="fa-solid fa-compass"></i>
+              </div>
+              <button onclick="app.refreshPublicRooms()" class="text-xs text-zinc-400 hover:text-white flex items-center gap-1 transition">
+                <i class="fa-solid fa-rotate-right"></i> <span data-i18n="refresh">Refresh</span>
+              </button>
+            </div>
+
+            <h3 class="text-lg font-bold text-zinc-100" data-i18n="live_lounges">Live Public Lounges</h3>
+            <p class="text-xs text-zinc-400" data-i18n="live_lounges_desc">Jump into active public screening rooms hosted by the community.</p>
+
+            <div id="public-rooms-list" class="space-y-2 max-h-[220px] overflow-y-auto pr-1">
+              <!-- Dynamically populated -->
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- ========================================== -->
+    <!-- 2. CINEMA ROOM VIEW                        -->
+    <!-- ========================================== -->
+    <section id="room-view" class="hidden">
+      <!-- Main Cinema Grid -->
+      <div class="cinema-main-grid grid grid-cols-1 lg:grid-cols-12 gap-5 items-start">
+        
+        <!-- Left / Center: Video Stage (Col 1-8) -->
+        <div class="lg:col-span-8 space-y-4">
+          
+          <!-- Unified Player Stage Container -->
+          <div id="player-stage" class="player-wrapper-sticky relative">
+            
+            <!-- Ambilight Ambient Glow Layer -->
+            <div id="player-ambilight-glow" class="ambilight-glow"></div>
+
+            <div class="player-container">
+              
+              <!-- Layer 1: YouTube IFrame Container -->
+              <div id="yt-player"></div>
+
+              <!-- Layer 2: HTML5 Video Element (Direct MP4, WebM, HLS, Local File, Screen Share) -->
+              <video id="html5-video" playsinline preload="auto" class="hidden"></video>
+
+              <!-- Layer 2.5: Universal Web Embed & Platform Stream IFrame -->
+              <iframe id="embed-player" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share; fullscreen" allowfullscreen class="hidden w-full h-full absolute inset-0 border-0"></iframe>
+
+              <!-- Layer 3: Floating Reactions Container -->
+              <div id="reactions-container" class="reactions-overlay"></div>
+
+              <!-- Layer 4: Subtitles Overlay Container -->
+              <div id="subtitle-overlay" class="subtitle-overlay-container"></div>
+
+              <!-- Layer 5: Screen Share Active Notification Banner -->
+              <div id="screen-share-active-banner" class="hidden absolute top-4 right-4 z-30 flex items-center gap-2 px-3 py-1.5 rounded-full bg-rose-600/90 backdrop-blur-md text-xs text-white shadow-xl">
+                <span class="w-2 h-2 rounded-full bg-white animate-pulse"></span>
+                <span>Live Screen: <span id="screen-share-sharer-name">Friend</span></span>
+              </div>
+
+              <!-- Layer 6: Buffer & Sync Notification Pill -->
+              <div id="buffer-pill" class="hidden absolute top-4 left-4 z-30 flex items-center gap-2 px-3 py-1.5 rounded-full bg-zinc-900/90 backdrop-blur-md border border-amber-500/40 text-xs text-amber-300 shadow-xl buffer-pill">
+                <i class="fa-solid fa-circle-notch fa-spin text-amber-400"></i>
+                <span id="buffer-pill-text">Syncing playback with friends...</span>
+              </div>
+
+              <!-- Layer 7: Local File Matching Banner (When local movie is active) -->
+              <div id="local-sync-banner" class="hidden absolute inset-0 z-20 flex flex-col items-center justify-center bg-zinc-950/90 backdrop-blur-md p-6 text-center space-y-3">
+                <div class="w-14 h-14 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-2xl shadow-xl">
+                  <i class="fa-solid fa-hard-drive"></i>
+                </div>
+                <h4 class="text-base font-bold text-zinc-100">Local Movie Sync (Zero-Upload)</h4>
+                <p class="text-xs text-zinc-400 max-w-md">
+                  The room is watching a local video file. Select the same local video file on your device to watch in perfect synchronization without uploading large files to a server!
+                </p>
+                <label class="px-4 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-bold text-xs cursor-pointer shadow-lg transition">
+                  <i class="fa-solid fa-folder-open mr-1.5"></i> Select Matching Local File
+                  <input type="file" accept="video/*" class="hidden" onchange="unifiedPlayer.loadSource({ type: 'local', file: this.files[0] }); document.getElementById('local-sync-banner').classList.add('hidden');">
+                </label>
+              </div>
+
+            </div>
+
+            <!-- Custom Video Controls Bar -->
+            <div class="mt-2 glass-panel p-3 rounded-2xl border border-white/5 space-y-2">
+              
+              <!-- Scrub Bar -->
+              <div class="flex items-center gap-3">
+                <div id="scrub-container" class="scrub-container flex-1">
+                  <div id="scrub-buffer" class="scrub-buffer" style="width: 0%;"></div>
+                  <div id="scrub-progress" class="scrub-progress" style="width: 0%;"></div>
+                  <div id="scrub-thumb" class="scrub-thumb" style="left: 0%;"></div>
+                </div>
+                <span id="time-display" class="text-[11px] font-mono text-zinc-400 flex-shrink-0 select-none">
+                  00:00 / 00:00
+                </span>
+                <span id="subtitles-active-badge" class="hidden text-[10px] bg-cyan-500/20 text-cyan-300 border border-cyan-500/30 px-1.5 py-0.5 rounded font-bold">CC</span>
+              </div>
+
+              <!-- Button Controls Row -->
+              <div class="flex items-center justify-between gap-2 pt-1 flex-wrap">
+                <!-- Left Playback controls -->
+                <div class="flex items-center gap-2">
+                  <button id="btn-play-pause" class="w-9 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center shadow-lg shadow-violet-600/30 transition">
+                    <i class="fa-solid fa-play text-sm ml-0.5"></i>
+                  </button>
+
+                  <!-- Volume -->
+                  <div class="flex items-center gap-1.5 px-2 py-1 rounded-xl bg-zinc-800/60 border border-white/5">
+                    <button id="btn-mute" class="text-zinc-400 hover:text-white transition">
+                      <i id="mute-icon" class="fa-solid fa-volume-high text-xs"></i>
+                    </button>
+                    <input type="range" id="volume-slider" min="0" max="1" step="0.05" value="1" class="w-16 custom-slider">
+                  </div>
+
+                  <!-- Speed Selector -->
+                  <select id="speed-select" class="glass-input px-2 py-1 rounded-lg text-xs bg-zinc-900 text-zinc-300 cursor-pointer">
+                    <option value="0.5">0.5x</option>
+                    <option value="0.75">0.75x</option>
+                    <option value="1" selected>1.0x</option>
+                    <option value="1.25">1.25x</option>
+                    <option value="1.5">1.5x</option>
+                    <option value="2">2.0x</option>
+                  </select>
+                </div>
+
+                <!-- Right Stage controls -->
+                <div class="flex items-center gap-1.5">
+                  <button onclick="ui.openAddMediaModal(false)" class="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-white/5 transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-arrow-right-arrow-left text-violet-400 text-[11px]"></i>
+                    <span class="hidden sm:inline" data-i18n="change_video">Change Video</span>
+                  </button>
+
+                  <!-- Screen Share Button -->
+                  <button id="btn-screen-share" onclick="screenShare.toggle()" class="px-2.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-xs font-medium border border-white/5 transition flex items-center gap-1.5" title="Share Screen">
+                    <i class="fa-solid fa-desktop text-cyan-400 text-[11px]"></i>
+                    <span class="hidden sm:inline" data-i18n="screen_share_btn">Share Screen</span>
+                  </button>
+
+                  <!-- Subtitles Configuration Button -->
+                  <button onclick="ui.openSubtitlesModal()" class="p-2 rounded-xl text-zinc-400 hover:text-white glass-panel-hover transition" title="Subtitles & Captions">
+                    <i class="fa-solid fa-closed-captioning text-xs"></i>
+                  </button>
+
+                  <!-- Ambilight Glow Button -->
+                  <button id="btn-ambilight" onclick="ui.toggleAmbilight()" class="p-2 rounded-xl text-violet-400 hover:text-white glass-panel-hover transition" title="Toggle Ambilight Cinematic Glow">
+                    <i class="fa-solid fa-lightbulb text-xs"></i>
+                  </button>
+
+                  <!-- Share Timestamp to Chat -->
+                  <button onclick="chatManager.insertCurrentTimestamp()" class="p-2 rounded-xl text-zinc-400 hover:text-cyan-400 glass-panel-hover transition" title="Share current timestamp in chat">
+                    <i class="fa-solid fa-stopwatch text-xs"></i>
+                  </button>
+
+                  <button id="btn-pip" class="p-2 rounded-xl text-zinc-400 hover:text-white glass-panel-hover transition" title="Picture in Picture">
+                    <i class="fa-solid fa-clone text-xs"></i>
+                  </button>
+
+                  <button id="btn-theater" class="p-2 rounded-xl text-zinc-400 hover:text-white glass-panel-hover transition" title="Theater Mode">
+                    <i class="fa-solid fa-expand text-xs"></i>
+                  </button>
+
+                  <button id="btn-fullscreen" class="p-2 rounded-xl text-zinc-400 hover:text-white glass-panel-hover transition" title="Fullscreen">
+                    <i class="fa-solid fa-maximize text-xs"></i>
+                  </button>
+                </div>
+              </div>
+
+            </div>
+          </div>
+
+          <!-- Under Player Bar: Media Info, Floating Reaction Bar & Host Controls -->
+          <div class="glass-panel p-4 rounded-2xl border border-white/5 space-y-3">
+            <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <span class="text-[10px] text-zinc-500 font-semibold uppercase tracking-wider" data-i18n="now_playing">Now Playing</span>
+                <h3 id="current-video-title" class="text-sm sm:text-base font-bold text-zinc-100 truncate max-w-lg">Loading video...</h3>
+              </div>
+
+              <!-- Host Quick Controls Toggle -->
+              <div id="host-quick-controls" class="hidden items-center gap-2">
+                <button onclick="socketClient.emit('set_control_mode', { mode: app.currentRoom?.controlMode === 'host_only' ? 'collaborative' : 'host_only' })" class="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 text-xs border border-white/5 transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-shield-halved text-amber-400 text-[11px]"></i>
+                  <span>Toggle Lock</span>
+                </button>
+                <button onclick="socketClient.emit('set_auto_pause', { enabled: !app.currentRoom?.autoPauseOnBuffer })" class="px-2.5 py-1 rounded-lg bg-zinc-800/80 hover:bg-zinc-700 text-zinc-300 text-xs border border-white/5 transition flex items-center gap-1.5">
+                  <i class="fa-solid fa-hourglass-half text-cyan-400 text-[11px]"></i>
+                  <span>Buffer Pause</span>
+                </button>
+              </div>
+            </div>
+
+            <!-- Quick Floating Screen Reactions Row -->
+            <div class="flex items-center justify-between border-t border-white/5 pt-3 gap-2 flex-wrap">
+              <div class="flex items-center gap-1 sm:gap-2">
+                <span class="text-xs text-zinc-500 hidden sm:inline mr-1 font-medium" data-i18n="reactions">Reactions:</span>
+                <button onclick="chatManager.sendReaction('😂')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Laugh">😂</button>
+                <button onclick="chatManager.sendReaction('❤️')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Love">❤️</button>
+                <button onclick="chatManager.sendReaction('🔥')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Fire">🔥</button>
+                <button onclick="chatManager.sendReaction('😱')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Shock">😱</button>
+                <button onclick="chatManager.sendReaction('👏')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Applause">👏</button>
+                <button onclick="chatManager.sendReaction('💀')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Dead">💀</button>
+                <button onclick="chatManager.sendReaction('🎉')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Party">🎉</button>
+                <button onclick="chatManager.sendReaction('🍿')" class="text-xl sm:text-2xl hover:scale-125 transition transform active:scale-95" title="Popcorn">🍿</button>
+              </div>
+
+              <!-- Toggle Floating Overlays -->
+              <button id="btn-toggle-reactions" onclick="chatManager.toggleReactions()" class="text-xs text-violet-400 hover:text-violet-300 flex items-center gap-1 transition" title="Toggle reaction overlays on video">
+                <i class="fa-solid fa-sparkles"></i>
+                <span class="hidden sm:inline" data-i18n="floating_overlays">Floating Overlays</span>
+              </button>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right: Social, Queue, Voice Sidebar (Col 9-12) -->
+        <div class="cinema-sidebar lg:col-span-4 space-y-4">
+          
+          <div class="glass-panel rounded-2xl border border-white/5 overflow-hidden flex flex-col h-[650px] shadow-2xl">
+            
+            <!-- Tab Navigation Header -->
+            <div class="flex items-center border-b border-white/5 bg-zinc-900/60 p-1.5 gap-1">
+              <button data-tab="chat" class="tab-nav-btn flex-1 py-2 rounded-xl text-xs font-semibold text-violet-400 border-b-2 border-violet-500 transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-comments text-xs"></i>
+                <span data-i18n="tab_chat">Chat</span>
+              </button>
+
+              <button data-tab="queue" class="tab-nav-btn flex-1 py-2 rounded-xl text-xs font-semibold text-zinc-400 border-b-2 border-transparent hover:text-zinc-200 transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-list-ol text-xs"></i>
+                <span data-i18n="tab_queue">Queue</span>
+                <span id="queue-badge" class="hidden text-[10px] bg-violet-600 text-white px-1.5 py-0.2 rounded-full font-bold">0</span>
+              </button>
+
+              <button data-tab="voice" class="tab-nav-btn flex-1 py-2 rounded-xl text-xs font-semibold text-zinc-400 border-b-2 border-transparent hover:text-zinc-200 transition flex items-center justify-center gap-1.5">
+                <i class="fa-solid fa-headset text-xs"></i>
+                <span data-i18n="tab_voice">Voice & Friends</span>
+                <span id="members-count-badge" class="text-[10px] bg-zinc-800 text-zinc-300 px-1.5 py-0.2 rounded-full">1</span>
+              </button>
+            </div>
+
+            <!-- Tab Panel 1: Live Chat -->
+            <div id="tab-panel-chat" class="tab-panel flex-1 flex flex-col overflow-hidden">
+              
+              <!-- Chat Controls Sub-Header: Live Polls Trigger -->
+              <div class="flex items-center justify-between px-3 py-1.5 border-b border-white/5 bg-zinc-950/40 text-xs text-zinc-400">
+                <span class="text-[11px] font-medium">Room Chat</span>
+                <button onclick="ui.openCreatePollModal()" class="text-[10px] text-violet-400 hover:text-violet-300 flex items-center gap-1 transition">
+                  <i class="fa-solid fa-square-poll-vertical"></i>
+                  <span data-i18n="create_poll_btn">Live Poll</span>
+                </button>
+              </div>
+
+              <!-- Live Poll Container (When active) -->
+              <div id="poll-widget-container" class="hidden p-3 border-b border-white/5 bg-zinc-950/40"></div>
+
+              <!-- Messages Scroll List -->
+              <div id="chat-messages-list" class="flex-1 p-3.5 overflow-y-auto space-y-1">
+                <!-- Dynamically populated -->
+              </div>
+
+              <!-- Reply Preview Banner -->
+              <div id="chat-reply-banner" class="hidden px-3 pt-2"></div>
+
+              <!-- Chat Input Bar -->
+              <div class="p-3 border-t border-white/5 bg-zinc-950/60 flex items-center gap-2">
+                <button onclick="chatManager.insertCurrentTimestamp()" class="p-2 rounded-xl text-zinc-400 hover:text-cyan-400 bg-zinc-800/60 border border-white/5 text-xs transition" title="Insert current video timestamp">
+                  <i class="fa-solid fa-stopwatch text-xs"></i>
+                </button>
+                <input type="text" id="chat-input" placeholder="Type a message... (Press Enter)" class="flex-1 glass-input px-3 py-2 rounded-xl text-xs" data-i18n-placeholder="type_message">
+                <button onclick="chatManager.sendMessage()" class="w-9 h-9 rounded-xl bg-violet-600 hover:bg-violet-500 text-white flex items-center justify-center text-xs shadow-md transition flex-shrink-0">
+                  <i class="fa-solid fa-paper-plane"></i>
+                </button>
+              </div>
+            </div>
+
+            <!-- Tab Panel 2: Shared Playlist Queue -->
+            <div id="tab-panel-queue" class="tab-panel hidden flex-1 flex flex-col overflow-hidden p-3.5 space-y-3">
+              <div class="flex items-center justify-between">
+                <div>
+                  <h4 class="text-xs font-bold text-zinc-200 uppercase tracking-wider" data-i18n="up_next">Up Next in Room</h4>
+                  <p class="text-[11px] text-zinc-400" data-i18n="drag_reorder">Drag to reorder playlist queue</p>
+                </div>
+                <button onclick="ui.openAddMediaModal(true)" class="px-2.5 py-1.5 rounded-lg bg-violet-600/30 hover:bg-violet-600/50 text-violet-300 border border-violet-500/30 text-xs font-medium transition flex items-center gap-1">
+                  <i class="fa-solid fa-plus text-[10px]"></i>
+                  <span data-i18n="add_video">Add Video</span>
+                </button>
+              </div>
+
+              <!-- Queue Items List -->
+              <div id="queue-items-container" class="flex-1 overflow-y-auto pr-1">
+                <!-- Dynamically populated -->
+              </div>
+            </div>
+
+            <!-- Tab Panel 3: Voice & Friends -->
+            <div id="tab-panel-voice" class="tab-panel hidden flex-1 flex flex-col overflow-hidden p-3.5 space-y-3">
+              
+              <!-- Voice Channel Control Box -->
+              <div class="glass-panel p-3.5 rounded-xl border border-white/10 space-y-2.5">
+                <div class="flex items-center justify-between">
+                  <div class="flex items-center gap-2">
+                    <div class="w-7 h-7 rounded-lg bg-cyan-500/20 text-cyan-400 flex items-center justify-center text-xs">
+                      <i class="fa-solid fa-microphone-lines"></i>
+                    </div>
+                    <span class="text-xs font-bold text-zinc-200" data-i18n="voice_channel">Voice Channel</span>
+                  </div>
+                  <button id="btn-voice-toggle" onclick="voiceChat.inVoice ? voiceChat.leaveVoice() : voiceChat.joinVoice()" class="px-3 py-1.5 rounded-lg bg-cyan-600/30 hover:bg-cyan-600/50 text-cyan-300 border border-cyan-500/30 text-xs font-medium transition">
+                    <i class="fa-solid fa-microphone mr-1.5"></i> <span data-i18n="join_voice">Join Voice Room</span>
+                  </button>
+                </div>
+
+                <!-- Voice Status & Controls -->
+                <div class="flex items-center justify-between pt-1">
+                  <button id="btn-voice-mute" style="display:none;" onclick="voiceChat.toggleMute()" class="px-3 py-1.5 rounded-lg bg-zinc-800 text-zinc-300 border border-white/10 text-xs transition">
+                    <i class="fa-solid fa-microphone mr-1"></i> <span data-i18n="mute">Mute</span>
+                  </button>
+                  <button id="btn-voice-ptt" style="display:none;" onclick="voiceChat.togglePushToTalk(!voiceChat.isPushToTalk)" class="px-2.5 py-1.5 rounded-lg bg-zinc-800 text-zinc-400 border border-white/10 text-xs transition" title="Toggle Push-to-Talk (Hold Spacebar)">
+                    <i class="fa-solid fa-keyboard mr-1"></i> <span data-i18n="push_to_talk">Push-to-Talk</span>
+                  </button>
+                </div>
+
+                <div id="ptt-instruction" style="display:none;" class="text-[10px] text-center text-zinc-400 pt-1 border-t border-white/5">
+                  <span id="ptt-indicator" data-i18n="ptt_hint">Press & Hold SPACEBAR to Speak</span>
+                </div>
+              </div>
+
+              <!-- Participants List -->
+              <div class="flex-1 overflow-y-auto space-y-2">
+                <h5 class="text-[11px] font-semibold text-zinc-400 uppercase tracking-wider" data-i18n="participants">Participants</h5>
+                <div id="members-list" class="space-y-1.5 pr-1">
+                  <!-- Dynamically populated -->
+                </div>
+              </div>
+
+            </div>
+
+          </div>
+
+        </div>
+
+      </div>
+    </section>
+
+  </main>
+
+
+  <!-- ========================================== -->
+  <!-- 3. MODALS                                  -->
+  <!-- ========================================== -->
+
+  <!-- Add Media / Change Video Modal -->
+  <div id="modal-add-media" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-lg w-full space-y-4 shadow-2xl animate-scaleUp">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 id="add-media-modal-title" class="text-base font-bold text-zinc-100">Load Media Source</h3>
+        <button onclick="ui.closeModal('modal-add-media')" class="text-zinc-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <!-- Source Selection Tabs -->
+      <div class="flex items-center gap-1 bg-zinc-900/80 p-1 rounded-xl text-xs overflow-x-auto">
+        <button type="button" data-source="youtube" class="media-source-tab px-3 py-2 rounded-lg font-medium bg-violet-600 text-white transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-brands fa-youtube text-red-400"></i> YouTube
+        </button>
+        <button type="button" data-source="platforms" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-clapperboard text-rose-400"></i> Top Platforms
+        </button>
+        <button type="button" data-source="direct" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-file-video text-blue-400"></i> Direct MP4
+        </button>
+        <button type="button" data-source="hls" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-tower-broadcast text-emerald-400"></i> HLS/IPTV
+        </button>
+        <button type="button" data-source="embed" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-code text-cyan-400"></i> Web Embeds
+        </button>
+        <button type="button" data-source="catalog" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-film text-amber-400"></i> Free Movies
+        </button>
+        <button type="button" data-source="local" class="media-source-tab px-3 py-2 rounded-lg font-medium text-zinc-400 hover:text-zinc-200 transition flex items-center justify-center gap-1.5 flex-shrink-0">
+          <i class="fa-solid fa-hard-drive text-orange-400"></i> Local Sync
+        </button>
+      </div>
+
+      <!-- Tab Content Panels -->
+      <div class="space-y-3 pt-2">
+        <!-- 1. YouTube Panel -->
+        <div id="source-panel-youtube" class="media-input-panel space-y-2.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">YouTube Link or Video ID</label>
+            <input type="text" id="input-yt-url" placeholder="https://www.youtube.com/watch?v=..." class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Title (Optional)</label>
+            <input type="text" id="input-yt-title" placeholder="e.g. Inception Trailer" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+        </div>
+
+        <!-- 2. Top Platforms Panel (Netflix, Disney+, Prime, Crunchyroll, Shahid) -->
+        <div id="source-panel-platforms" class="media-input-panel hidden space-y-3">
+          <div class="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2 text-xs">
+            <div class="flex items-center gap-2 text-rose-400 font-bold">
+              <i class="fa-solid fa-tv"></i>
+              <span>Stream Any Movie Platform in 1080p With Audio</span>
+            </div>
+            <p class="text-zinc-400 leading-relaxed text-[11px]">
+              Open your favorite streaming service in another browser tab, then click the button below to stream the tab directly with full system audio!
+            </p>
+          </div>
+
+          <!-- Platform Shortcuts -->
+          <div class="grid grid-cols-3 gap-2 text-center text-xs">
+            <a href="https://www.netflix.com" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-red-500 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-base tracking-tighter">NETFLIX</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+            <a href="https://www.primevideo.com" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-cyan-400 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-base">prime video</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+            <a href="https://www.disneyplus.com" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-blue-400 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-base font-serif">Disney+</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+            <a href="https://www.crunchyroll.com" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-orange-500 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-sm">crunchyroll</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+            <a href="https://shahid.mbc.net" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-amber-400 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-base">SHAHID</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+            <a href="https://tv.apple.com" target="_blank" rel="noopener" class="p-2 rounded-xl bg-zinc-900/80 hover:bg-zinc-800 border border-white/5 text-zinc-200 font-bold flex flex-col items-center gap-1 transition">
+              <span class="text-base">Apple TV+</span>
+              <span class="text-[9px] text-zinc-400">Open Site ↗</span>
+            </a>
+          </div>
+
+          <!-- DRM Black Screen Tip Banner -->
+          <div class="p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs space-y-1">
+            <span class="font-semibold text-amber-300 flex items-center gap-1.5">
+              <i class="fa-solid fa-lightbulb"></i>
+              <span>Anti-Black Screen Tip for Netflix & Prime:</span>
+            </span>
+            <p class="text-[11px] text-zinc-300">
+              In Chrome / Edge settings, search for <strong>"hardware acceleration"</strong> and turn it OFF. Then restart your browser and share the tab — your friends will see the video crystal clear!
+            </p>
+          </div>
+
+          <button type="button" onclick="ui.closeModal('modal-add-media'); screenShare.startScreenShare();" class="w-full py-2.5 rounded-xl bg-gradient-to-r from-rose-600 to-violet-600 hover:from-rose-500 hover:to-violet-500 text-white font-bold text-xs shadow-lg transition flex items-center justify-center gap-2">
+            <i class="fa-solid fa-desktop"></i>
+            <span>Select Movie Tab to Stream with Audio</span>
+          </button>
+        </div>
+
+        <!-- 3. Direct Video Panel -->
+        <div id="source-panel-direct" class="media-input-panel hidden space-y-2.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Direct Video URL (.mp4, .webm, .mkv)</label>
+            <input type="text" id="input-direct-url" placeholder="https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Title (Optional)</label>
+            <input type="text" id="input-direct-title" placeholder="e.g. Big Buck Bunny" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+        </div>
+
+        <!-- 4. HLS Stream Panel -->
+        <div id="source-panel-hls" class="media-input-panel hidden space-y-2.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">HLS Adaptive Stream URL (.m3u8)</label>
+            <input type="text" id="input-hls-url" placeholder="https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Stream Title (Optional)</label>
+            <input type="text" id="input-hls-title" placeholder="e.g. Live Stream Broadcast" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+        </div>
+
+        <!-- 5. Web Embeds & Video Hosters Panel -->
+        <div id="source-panel-embed" class="media-input-panel hidden space-y-2.5">
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Web Embed URL or Video Link</label>
+            <textarea id="input-embed-url" rows="2" placeholder="Paste Vimeo, Twitch, Dailymotion, Streamable link or <iframe> code here..." class="w-full glass-input px-3 py-2 rounded-xl text-xs font-mono"></textarea>
+          </div>
+          <div>
+            <label class="block text-xs font-medium text-zinc-400 mb-1">Title (Optional)</label>
+            <input type="text" id="input-embed-title" placeholder="e.g. Twitch Livestream / Web Series" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+          </div>
+        </div>
+
+        <!-- 6. Free Cinema & Sample Movies (1-Click Instant Play) -->
+        <div id="source-panel-catalog" class="media-input-panel hidden space-y-2.5 max-h-[260px] overflow-y-auto pr-1">
+          <p class="text-[11px] text-zinc-400">Click any movie below to immediately start streaming with your friends in full HD:</p>
+          
+          <div class="space-y-1.5 text-xs">
+            <div class="p-2.5 rounded-xl bg-zinc-900/60 border border-white/5 flex items-center justify-between gap-3 hover:border-violet-500/40 transition">
+              <div>
+                <h5 class="font-bold text-zinc-200">Big Buck Bunny (4K Remaster)</h5>
+                <span class="text-[10px] text-zinc-500">Animation / Family • 10m • 4K Ultra HD</span>
+              </div>
+              <button type="button" onclick="ui.playSampleMovie('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4', 'Big Buck Bunny (4K Ultra HD)', 'direct')" class="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1">
+                <i class="fa-solid fa-play text-[10px]"></i> Play
+              </button>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-zinc-900/60 border border-white/5 flex items-center justify-between gap-3 hover:border-violet-500/40 transition">
+              <div>
+                <h5 class="font-bold text-zinc-200">Tears of Steel (Sci-Fi 1080p)</h5>
+                <span class="text-[10px] text-zinc-500">Sci-Fi / Action • 12m • 1080p Full HD</span>
+              </div>
+              <button type="button" onclick="ui.playSampleMovie('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/TearsOfSteel.mp4', 'Tears of Steel (Sci-Fi)', 'direct')" class="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1">
+                <i class="fa-solid fa-play text-[10px]"></i> Play
+              </button>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-zinc-900/60 border border-white/5 flex items-center justify-between gap-3 hover:border-violet-500/40 transition">
+              <div>
+                <h5 class="font-bold text-zinc-200">Sintel: The Dragon Hunt</h5>
+                <span class="text-[10px] text-zinc-500">Fantasy / Adventure • 15m • 1080p</span>
+              </div>
+              <button type="button" onclick="ui.playSampleMovie('https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/Sintel.mp4', 'Sintel (Fantasy Drama)', 'direct')" class="px-3 py-1 bg-violet-600 hover:bg-violet-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1">
+                <i class="fa-solid fa-play text-[10px]"></i> Play
+              </button>
+            </div>
+
+            <div class="p-2.5 rounded-xl bg-zinc-900/60 border border-white/5 flex items-center justify-between gap-3 hover:border-violet-500/40 transition">
+              <div>
+                <h5 class="font-bold text-zinc-200">NASA Earth from Orbit (Live HLS)</h5>
+                <span class="text-[10px] text-emerald-400 font-medium">Live Adaptive Stream • Multi-Bitrate</span>
+              </div>
+              <button type="button" onclick="ui.playSampleMovie('https://test-streams.mux.dev/x36xhzz/x36xhzz.m3u8', 'NASA Earth Live Stream', 'hls')" class="px-3 py-1 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-medium transition flex items-center gap-1">
+                <i class="fa-solid fa-tower-broadcast text-[10px]"></i> Stream
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <!-- 7. Local File Sync (Zero Upload) Panel -->
+        <div id="source-panel-local" class="media-input-panel hidden space-y-2.5">
+          <p class="text-xs text-zinc-400 leading-relaxed">
+            Choose a movie file stored on your device. Friends in the room can pick their local copy of the same file to watch synchronously with zero data uploaded to any server.
+          </p>
+          <label class="flex flex-col items-center justify-center border-2 border-dashed border-white/20 hover:border-violet-500/60 rounded-2xl p-6 cursor-pointer bg-zinc-900/40 transition">
+            <i class="fa-solid fa-cloud-arrow-up text-2xl text-violet-400 mb-2"></i>
+            <span class="text-xs font-medium text-zinc-200">Click to pick local movie file</span>
+            <span class="text-[10px] text-zinc-500 mt-0.5">MP4, WebM, MKV supported</span>
+            <input type="file" id="local-file-input" accept="video/*" class="hidden">
+          </label>
+          <p id="local-file-info" class="hidden text-xs text-emerald-400 font-medium truncate text-center"></p>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+        <button type="button" onclick="ui.closeModal('modal-add-media')" class="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white transition">Cancel</button>
+        <button type="button" id="btn-submit-media" onclick="ui.submitMedia()" class="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs shadow-lg shadow-violet-600/30 transition">
+          Load Video
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Create Live Poll Modal -->
+  <div id="modal-create-poll" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-md w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-base font-bold text-zinc-100 flex items-center gap-2">
+          <i class="fa-solid fa-square-poll-vertical text-violet-400"></i>
+          <span>Create Live Room Poll</span>
+        </h3>
+        <button onclick="ui.closeModal('modal-create-poll')" class="text-zinc-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-3">
+        <div>
+          <label class="block text-xs font-medium text-zinc-400 mb-1">Poll Question</label>
+          <input type="text" id="poll-input-question" placeholder="e.g. Which movie should we watch next?" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-zinc-400 mb-1">Option 1</label>
+          <input type="text" id="poll-input-opt1" placeholder="e.g. Inception" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-zinc-400 mb-1">Option 2</label>
+          <input type="text" id="poll-input-opt2" placeholder="e.g. Interstellar" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+        </div>
+        <div>
+          <label class="block text-xs font-medium text-zinc-400 mb-1">Option 3 (Optional)</label>
+          <input type="text" id="poll-input-opt3" placeholder="e.g. The Dark Knight" class="w-full glass-input px-3 py-2 rounded-xl text-xs">
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end gap-2 pt-3 border-t border-white/10">
+        <button type="button" onclick="ui.closeModal('modal-create-poll')" class="px-4 py-2 rounded-xl text-xs text-zinc-400 hover:text-white transition">Cancel</button>
+        <button type="button" onclick="pollManager.createPoll(document.getElementById('poll-input-question').value, [document.getElementById('poll-input-opt1').value, document.getElementById('poll-input-opt2').value, document.getElementById('poll-input-opt3').value].filter(Boolean))" class="px-5 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs shadow-lg shadow-violet-600/30 transition">
+          Launch Poll
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Subtitles Configuration Modal -->
+  <div id="modal-subtitles" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-md w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-base font-bold text-zinc-100 flex items-center gap-2">
+          <i class="fa-solid fa-closed-captioning text-cyan-400"></i>
+          <span>Subtitles & Captions Settings</span>
+        </h3>
+        <button onclick="ui.closeModal('modal-subtitles')" class="text-zinc-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-4 text-xs">
+        <!-- Load Subtitle File -->
+        <div>
+          <label class="block font-medium text-zinc-300 mb-1.5">Load Subtitle File (.srt or .vtt)</label>
+          <input type="file" id="subtitles-file-input" accept=".srt,.vtt" onchange="subtitles.loadSubtitleFile(this.files[0])" class="w-full text-xs text-zinc-400 file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-xs file:bg-violet-600 file:text-white file:cursor-pointer hover:file:bg-violet-500">
+        </div>
+
+        <!-- Sync Offset Adjustment -->
+        <div class="p-3 rounded-xl bg-zinc-900/60 border border-white/5 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="font-medium text-zinc-300">Sync Delay Offset:</span>
+            <span id="subtitle-offset-val" class="font-mono text-cyan-400 font-bold">0.0s</span>
+          </div>
+          <div class="flex items-center gap-2">
+            <button onclick="subtitles.adjustOffset(-0.5)" class="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition font-mono">-0.5s</button>
+            <button onclick="subtitles.resetOffset()" class="py-1.5 px-3 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-400 transition font-mono">Reset</button>
+            <button onclick="subtitles.adjustOffset(0.5)" class="flex-1 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 transition font-mono">+0.5s</button>
+          </div>
+        </div>
+
+        <!-- Typography & Appearance -->
+        <div class="grid grid-cols-2 gap-3">
+          <div>
+            <label class="block font-medium text-zinc-400 mb-1">Font Size</label>
+            <select onchange="subtitles.setFontSize(this.value)" class="w-full glass-input px-2 py-1.5 rounded-lg text-xs bg-zinc-900">
+              <option value="text-sm">Small</option>
+              <option value="text-lg" selected>Medium</option>
+              <option value="text-2xl">Large</option>
+            </select>
+          </div>
+
+          <div>
+            <label class="block font-medium text-zinc-400 mb-1">Text Color</label>
+            <select onchange="subtitles.setTextColor(this.value)" class="w-full glass-input px-2 py-1.5 rounded-lg text-xs bg-zinc-900">
+              <option value="#ffffff" selected>White</option>
+              <option value="#fef08a">Yellow</option>
+              <option value="#67e8f9">Cyan</option>
+            </select>
+          </div>
+        </div>
+
+        <!-- Background Box -->
+        <div class="flex items-center justify-between pt-1">
+          <span class="text-zinc-300">Subtitle Background Box</span>
+          <button onclick="subtitles.toggleBackground()" class="px-3 py-1 rounded-lg bg-zinc-800 text-zinc-300 hover:bg-zinc-700 transition">
+            Toggle
+          </button>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end pt-3 border-t border-white/10">
+        <button type="button" onclick="ui.closeModal('modal-subtitles')" class="px-4 py-2 rounded-xl text-xs bg-violet-600 text-white font-medium hover:bg-violet-500 transition">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Sync Diagnostics Modal -->
+  <div id="modal-sync-diagnostics" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-sm w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-base font-bold text-zinc-100 flex items-center gap-2">
+          <i class="fa-solid fa-gauge-high text-cyan-400"></i>
+          <span>Sync & Latency Diagnostics</span>
+        </h3>
+        <button onclick="ui.closeModal('modal-sync-diagnostics')" class="text-zinc-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div class="space-y-2.5 text-xs">
+        <div class="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-white/5">
+          <span class="text-zinc-400">WebSocket Round-Trip Latency:</span>
+          <span id="diag-ping" class="font-mono text-emerald-400 font-bold">18 ms</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-white/5">
+          <span class="text-zinc-400">Master Clock Drift:</span>
+          <span id="diag-drift" class="font-mono text-cyan-400 font-bold">0.02s (Optimal)</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-white/5">
+          <span class="text-zinc-400">Playback State:</span>
+          <span id="diag-status" class="font-mono text-zinc-200">Playing</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-white/5">
+          <span class="text-zinc-400">Playback Speed:</span>
+          <span id="diag-rate" class="font-mono text-zinc-200">1.0x</span>
+        </div>
+        <div class="flex items-center justify-between p-2 rounded-lg bg-zinc-900/60 border border-white/5">
+          <span class="text-zinc-400">Mesh Voice Peers:</span>
+          <span id="diag-peer-count" class="font-mono text-zinc-200">1 participant</span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-end pt-2 border-t border-white/10">
+        <button type="button" onclick="ui.closeModal('modal-sync-diagnostics')" class="px-4 py-2 rounded-xl text-xs bg-zinc-800 text-zinc-300 hover:text-white transition">Close</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Password Prompt Modal for Private Rooms -->
+  <div id="modal-password-prompt" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-sm w-full space-y-4 shadow-2xl">
+      <div class="text-center space-y-1">
+        <div class="w-12 h-12 rounded-2xl bg-amber-500/20 text-amber-400 flex items-center justify-center text-xl mx-auto shadow-inner">
+          <i class="fa-solid fa-lock"></i>
+        </div>
+        <h3 class="text-base font-bold text-zinc-100">Private Room</h3>
+        <p id="pwd-modal-room-title" class="text-xs text-zinc-400 truncate">Room Code: <span id="pwd-modal-room-code"></span></p>
+      </div>
+
+      <div>
+        <input type="password" id="input-room-pwd" placeholder="Enter room password..." class="w-full glass-input px-3 py-2.5 rounded-xl text-xs text-center">
+      </div>
+
+      <div class="flex items-center gap-2">
+        <button onclick="document.getElementById('modal-password-prompt').classList.add('hidden')" class="w-1/2 py-2 rounded-xl text-xs text-zinc-400 hover:text-white transition">Cancel</button>
+        <button id="btn-submit-pwd" class="w-1/2 py-2 rounded-xl bg-violet-600 hover:bg-violet-500 text-white font-semibold text-xs shadow-lg transition">Enter Room</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- Avatar Selector Modal -->
+  <div id="modal-avatar-picker" class="hidden fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-md">
+    <div class="glass-panel p-6 rounded-2xl border border-white/10 max-w-md w-full space-y-4 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-white/10 pb-3">
+        <h3 class="text-base font-bold text-zinc-100">Choose Your Avatar</h3>
+        <button onclick="document.getElementById('modal-avatar-picker').classList.add('hidden')" class="text-zinc-400 hover:text-white transition">
+          <i class="fa-solid fa-xmark text-lg"></i>
+        </button>
+      </div>
+
+      <div id="avatar-grid" class="grid grid-cols-4 gap-2.5 max-h-[300px] overflow-y-auto p-1">
+        <!-- Dynamically populated -->
+      </div>
+    </div>
+  </div>
+
+  <!-- Scripts -->
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="/js/i18n.js"></script>
+  <script src="/js/sfx.js"></script>
+  <script src="/js/socketClient.js"></script>
+  <script src="/js/player.js"></script>
+  <script src="/js/syncEngine.js"></script>
+  <script src="/js/voiceChat.js"></script>
+  <script src="/js/chat.js"></script>
+  <script src="/js/queue.js"></script>
+  <script src="/js/subtitles.js"></script>
+  <script src="/js/polls.js"></script>
+  <script src="/js/screenShare.js"></script>
+  <script src="/js/ui.js"></script>
+  <script src="/js/app.js"></script>
+</body>
+</html>

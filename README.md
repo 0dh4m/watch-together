@@ -3,7 +3,7 @@
 <div align="center">
 
 [![Author](https://img.shields.io/badge/Author-0dh4m-2563eb?style=flat-square&logo=github&logoColor=white)](https://github.com/0dh4m)
-[![Live Demo](https://img.shields.io/badge/Live%20Demo-Watch%20Together-0284c7?style=flat-square&logo=google-chrome&logoColor=white)](https://0dh4m.github.io/portfolio/demos/watch-together/index.html)
+[![Live Demo](https://img.shields.io/badge/Live%20Demo-Watch%20Together-0284c7?style=flat-square&logo=google-chrome&logoColor=white)](https://0dh4m.github.io/demos/watch-together/index.html)
 [![WebRTC](https://img.shields.io/badge/WebRTC-P2P%20Voice%20Mesh-38bdf8?style=flat-square)](https://github.com/0dh4m/watch-together)
 [![Socket.IO](https://img.shields.io/badge/Real--Time-Socket.IO%20v4-6366f1?style=flat-square)](https://github.com/0dh4m/watch-together)
 [![License](https://img.shields.io/badge/License-MIT-slate?style=flat-square)](LICENSE)
@@ -71,7 +71,7 @@
 ## 🚀 Live Demo & Getting Started
 
 Experience the interactive simulator:
-👉 **[Launch Watch Together Demo](https://0dh4m.github.io/portfolio/demos/watch-together/index.html)**
+👉 **[Launch Watch Together Demo](https://0dh4m.github.io/demos/watch-together/index.html)**
 
 ### Requirements
 - **Node.js 22+** (the server uses the built-in `node:sqlite` module).
